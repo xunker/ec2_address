@@ -1,0 +1,277 @@
+#!/usr/bin/env ruby
+require 'aws-sdk'
+require 'trollop'
+
+# Only ever used if AWS_REGION env var not found and aws-region arg not passed.
+DEFAULT_REGION = 'us-west-2'
+
+opts = Trollop::options do
+  opt :public_ip_address,
+    'return public IP address name of instance (default)',
+    short: :i
+  opt :public_dns_name,
+    'return public DNS name of instance',
+    short: :n
+  opt :private_ip_address,
+    'return private IP address name of instance',
+    short: :I
+  opt :private_dns_name,
+    'return private DNS name of instance',
+    short: :N
+  opt :first_instance,
+    'stop querying after first match',
+    short: :f
+  opt :first_region,
+    'stop querying addition regions after first match',
+    short: :F
+  opt :partial_match,
+    'match partial name, case-insensitive',
+    short: :p
+  opt :ssh,
+    'output options for ssh client("-i <pem file> <addr>")',
+    short: :s
+  opt :ssh_user,
+    'add a username to ssh output',
+    type: :string,
+    short: :u
+  opt :disable_ssh_known_hosts,
+    'output ssh options to ignore the ssh `known_hosts` file.',
+    short: :X
+  opt :ssh_directory,
+    'ssh key directory',
+    short: :S,
+    default: "#{File.join(ENV['HOME'], '/.ssh')}"
+  opt :aws_region,
+    'default AWS region',
+    type: :string,
+    default: DEFAULT_REGION
+  opt :aws_access_key_id,
+    'your AWS access key ID',
+    type: :string
+  opt :aws_secret_access_key,
+    'your AWS secret access key',
+    type: :string
+  opt :verbose,
+    'verbose logging',
+    short: :v
+  opt :very_verbose,
+    'very verbose logging (debugging)',
+    short: :V
+  stop_on_unknown
+end
+
+# Mirrors Rails log levels, probably more log levels than we need here.
+LOG_LEVELS = [:debug, :info, :warn, :error, :fatal]
+
+@log_level = opts.verbose ? LOG_LEVELS.index(:info) : nil
+@log_level ||= opts.very_verbose ? LOG_LEVELS.index(:debug) :nil
+@log_level ||= LOG_LEVELS.index(LOG_LEVELS.last)
+
+def log(level, msg)
+  level = level.to_sym
+  return if @log_level > LOG_LEVELS.index(level)
+  STDERR.puts "*** #{level}: #{msg}"
+end
+
+def fatal_error(msg)
+  STDERR.puts "Fatal Error: #{msg}"
+  exit 0
+end
+
+log :debug, "Log level: #{LOG_LEVELS[@log_level]} (#{@log_level})"
+
+unless requested_instance_name = ARGV.first
+  Trollop::die "must supply instance name"
+end
+
+# We want 'public_ip_address' to default to true, but but we don't want Trollop
+# to automatically add the --no-public-ip-address option
+if %w[public_ip_address public_dns_name private_ip_address private_dns_name].map{|o| opts[o.to_sym]}.none?
+  log :info, "assuming default --public-ip-address argument"
+  opts[:public_ip_address] = true
+end
+
+# TODO support --aws-region here.
+if ENV['AWS_REGION']
+  log :info, "AWS_REGION variable contains #{ENV['AWS_REGION'].inspect}"
+else
+  log :info, "AWS_REGION not found, using default (#{DEFAULT_REGION.inspect})"
+end
+
+default_ec2_client_args = {
+  access_key_id: opts[:aws_access_key_id],
+  secret_access_key: opts[:aws_secret_access_key]
+}.delete_if{|k,v| v.nil?}
+
+log :debug, "Default EC2 Client Args: #{default_ec2_client_args.inspect}"
+
+# TODO use --aws-region is given before using AWS_REGION or DEFAULT_REGION
+ec2 = Aws::EC2::Client.new(
+  default_ec2_client_args.merge(region: ENV['AWS_REGION'] || DEFAULT_REGION)
+)
+
+begin
+  # Have the default region be the first region queried.
+  regions = ([DEFAULT_REGION] + ec2.describe_regions.map(&:regions).flatten.map(&:region_name).sort).uniq
+rescue Aws::Errors::MissingCredentialsError
+  fatal_error <<ERRMSG
+Unable to find AWS credentials.
+You can configure your AWS credentials a few different ways:
+
+ * Pass --aws-access-key-id and --aws-secret-access-key arguments.
+
+ * Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to ENV
+
+ * Create an `~/.aws/credentals` file:
+
+    [default]
+    aws_access_key_id = <access key id>
+    aws_secret_access_key = <secret access key>
+
+ERRMSG
+rescue Exception => e
+  # Print out the error message test from any AWS errors, re-raise the rest.
+  if e.class.to_s =~ /^Aws::/i
+    fatal_error e
+  else
+    raise e
+  end
+end
+
+def instance_name(instance)
+  if name_tag = instance.tags.detect{|t| t.key == 'Name'}
+    name_tag.value
+  else
+    nil
+  end
+end
+
+def instance_name_eq?(instance, name)
+  instance_name(instance) == name
+end
+
+def instance_locator(opts, instance)
+  if opts[:public_dns_name]
+    instance.public_dns_name
+  elsif opts[:private_ip_address]
+    instance.private_ip_address
+  elsif opts[:private_dns_name]
+    instance.private_dns_name
+  else
+    # opts[:public_ip_address]
+    instance.public_ip_address
+  end
+end
+
+# Look for the "UserName" tag and return the value if found.
+def instance_user_name(instance)
+  if user_name_tag = instance.tags.detect{|t| t.key == 'UserName'}
+    user_name_tag.value
+  else
+    nil
+  end
+end
+
+instances_matching_name = []
+regions.each do |region|
+  if (opts.first_instance || opts.first_region) && instances_matching_name.size > 0
+    log :info, "Stopping region scan after first matched region"
+    break
+  end
+  log :info, "Querying region: #{region}"
+  ec2_region = (ec2.config.region == region ? ec2 : Aws::EC2::Client.new(default_ec2_client_args.merge(region: region)))
+
+  running_instances = ec2_region.describe_instances.map(&:reservations).flatten.map(&:instances).flatten.select{|i| i.state.name == 'running'}
+  log :info, "Region #{region} contains #{running_instances.size} running instances"
+  instances_matching_name += running_instances.select{|i|
+    if opts.partial_match
+      if instance_name(i) =~ /#{requested_instance_name}/i
+        log :debug, "Partial match on #{instance_name(i).inspect}"
+        true
+      else
+        log :debug, "Did not match on #{instance_name(i).inspect}"
+      end
+    else
+      if instance_name(i) == requested_instance_name
+        log :debug, "Exact match on #{instance_name(i).inspect}"
+        true
+      else
+        log :debug, "Did not match on #{instance_name(i).inspect}"
+      end
+    end
+  }
+end
+
+matching_instance = nil
+
+if instances_matching_name.size == 1
+  matching_instance = instances_matching_name.first
+elsif instances_matching_name.size > 1
+  if opts.first_instance
+    matching_instance = instances_matching_name.first
+  else
+    while matching_instance.nil?
+      puts "#{instances_matching_name.size} instances found with name '#{requested_instance_name}'."
+      puts "Please choose the instance you want:\n"
+      instances_matching_name.each_with_index do |instance, index|
+        puts "\t#{index}\t#{instance_name(instance)}\t#{instance.public_ip_address}\t#{instance.public_dns_name}"
+      end
+      print "0-#{instances_matching_name.size-1}, ENTER=0 > "
+      instance_choice = STDIN.gets.strip
+
+      if instance_choice =~ /^\d+$/
+        matching_instance = instances_matching_name[instance_choice.to_i]
+      elsif instance_choice == '' # enter key
+        matching_instance = instances_matching_name.first
+      end
+
+      puts "Invalid choice." if matching_instance.nil?
+    end
+  end
+end
+
+unless matching_instance
+  fatal_error "No instances with name '#{requested_instance_name}' were found."
+end
+
+log :debug, "Matching instance: name: #{instance_name(matching_instance).inspect}"
+%w[key_name public_ip_address private_ip_address public_dns_name private_dns_name].each do |p|
+  log :debug, "Matching instance: #{p}: #{matching_instance.send(p.to_sym).inspect}"
+end
+
+
+if opts.ssh
+  # output options that can be used in ssh call
+  ssh_args = []
+
+  if matching_instance.key_name
+    pem_file_name = "#{matching_instance.key_name}.pem"
+    log :debug, "Instance pem filename: #{pem_file_name.inspect}"
+    pem_file_path = File.join(opts.ssh_directory, pem_file_name)
+    log :debug, "Instance pem file path: #{pem_file_path.inspect}"
+    if File.exists?(pem_file_path)
+      log :debug, "Using PEM file: #{pem_file_name.inspect}"
+      ssh_args << "-i .ssh/#{matching_instance.key_name}.pem"
+    else
+      log :info, "PEM #{pem_file_name.inspect} not found"
+    end
+  end
+
+  if opts.disable_ssh_known_hosts
+    # Disable checking/writing to `known_hosts` file. Props to:
+    # http://linuxcommando.blogspot.com/2008/10/how-to-disable-ssh-host-key-checking.html
+    ssh_args << "-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+  end
+
+  ssh_user_name = opts.ssh_user || instance_user_name(matching_instance)
+  if ssh_user_name
+    ssh_args << [ssh_user_name, '@', instance_locator(opts, matching_instance)].join
+  else
+    ssh_args << instance_locator(opts, matching_instance)
+  end
+
+  puts ssh_args.join(' ')
+else
+  # puts matching_instance.public_dns_name
+  puts instance_locator(opts, matching_instance)
+end
