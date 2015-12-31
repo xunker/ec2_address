@@ -27,6 +27,7 @@
   - Windows, if possible
 
 === WANT TO
+* Replace Trollop with GetoptLong to minimize external dependencies. Trollop is easier to work with, but GetoptLong is built-in to ruby.
 * Find a way to test the installation process on various OSes.
 * Include `ssh_ec2` shortcut script.
-* Option to create and execute complete ssh command in order to deal with multiple name matches.s
+* Option to create and execute complete ssh command in order to deal with multiple name matches.
