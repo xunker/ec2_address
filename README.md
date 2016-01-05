@@ -2,7 +2,7 @@
 
 `ec2_address` is a command line tool made to quickly get the IP address of an Amazon AWS EC2 instance by name. I can also automate SSH'ing to them, too.
 
-It will search all your available regions for instance that match a name, can return public and private IPs and hostnames.
+It will search _all_your_available_regions_ for instances that match a name, and can return public and private IPs or hostnames.
 
 It can also automatically build an `ssh` command based in the instance name. If you have a `.pem` file that matches the instance `KeyName`, the ssh will be told to use it automatically.
 
@@ -40,12 +40,8 @@ Please choose the instance you want:
 0-1, ENTER=0 > 0
 98.139.183.24
 
-# ssh to an instance by name, a little more tricky.
-# The first line below is an example of the output..
-$ ec2_address --ssh --ssh-user ec2-user -disable-ssh-known-hosts some-ec2-instance
--i ~/.ssh/my-key.pem -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no ec2-user@98.139.183.24
-# ..and here is how you use it:
-$ ssh $(ec2_address -s -u ec2-user -X some-ec2-instance)
+# ssh to an instance by name:
+$ ssh $(ec2_address --ssh --ssh-user ec2-user --disable-ssh-known-hosts some-ec2-instance)
 
 ```
 
@@ -55,7 +51,6 @@ The application is written in Ruby and so having Ruby (1.9.3+) installed is a pr
 
 ```bash
 # Linux, *nix and Mac OS X
-
 $ sudo gem install ec2_address
 
 # Windows install instructions TBA
@@ -66,6 +61,8 @@ $ sudo gem install ec2_address
 The main executable is `ec2_address`.
 
 It will try to automatically detect your AWS credentials. If they cannot be read, or if you want to set them differently, you can manually pass them with `--aws-access-key-id` and `--aws-secret-access-key`.
+
+NOTE: the `--aws-region` option is only used to set the region used for the initial connection to AWS whereupon the tool will get a list of all the regions you have access too. It does *not* restrict the search to that specific region.
 
 ### Options
 
@@ -93,15 +90,13 @@ Options:
   -h, --help                         Show this message
 ```
 
-## examples
+## Examples
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+TBA
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/ec2_address. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](contributor-covenant.org) code of conduct.
+Bug reports and pull requests are welcome on GitHub at https://github.com/xunker/ec2_address. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [Contributor Covenant](contributor-covenant.org) code of conduct.
 
 
 ## License
