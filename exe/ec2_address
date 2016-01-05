@@ -2,45 +2,59 @@
 require 'aws-sdk'
 require 'trollop'
 
+require 'ec2_address'
+
 # Only ever used if AWS_REGION env var not found and aws-region arg not passed.
 DEFAULT_REGION = 'us-west-2'
 
 opts = Trollop::options do
+  version "ec2_address #{Ec2Address::VERSION} (c) 2015 Matthew Nielsen"
+
+  banner <<-EOS
+A command line tool to quickly get the IP address of an Amazon AWS EC2 instance by name. It can also automate SSH'ing to them, too.
+
+Usage: ec2_address [options] <instance name>
+
+Options:
+
+EOS
+
+
   opt :public_ip_address,
-    'return public IP address name of instance (default)',
+    'use public IP address name of instance (default)',
     short: :i
   opt :public_dns_name,
-    'return public DNS name of instance',
+    'use public DNS name of instance',
     short: :n
   opt :private_ip_address,
-    'return private IP address name of instance',
+    'use private IP address name of instance',
     short: :I
   opt :private_dns_name,
-    'return private DNS name of instance',
+    'use private DNS name of instance',
     short: :N
   opt :first_instance,
     'stop querying after first match',
     short: :f
   opt :first_region,
-    'stop querying addition regions after first match',
+    'stop querying additional regions after first match',
     short: :F
   opt :partial_match,
     'match partial name, case-insensitive',
     short: :p
   opt :ssh,
-    'output options for ssh client("-i <pem file> <addr>")',
+    'output options for ssh client ("-i <pem file> <addr>")',
     short: :s
   opt :ssh_user,
-    'add a username to ssh output',
+    'add a username to ssh output ("<username>@<host>")',
     type: :string,
     short: :u
   opt :disable_ssh_known_hosts,
-    'output ssh options to ignore the ssh `known_hosts` file.',
+    'tell ssh to ignore the `known_hosts` file.',
     short: :X
   opt :ssh_directory,
     'ssh key directory',
     short: :S,
-    default: "#{File.join(ENV['HOME'], '/.ssh')}"
+    default: "#{File.join(ENV['HOME'] || '~', '/.ssh')}"
   opt :aws_region,
     'default AWS region',
     type: :string,

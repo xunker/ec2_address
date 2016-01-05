@@ -17,7 +17,7 @@
       - --aws-region and AWS_REGION
       - --aws-access-key-id and AWS_SECRET_ACCESS_KEY
       - --aws-secret-access-key and AWS_ACCESS_KEY_ID
-* Make it runable when installed as a gem.
+* add man page
 * Refactor in to better code layout.
 * Add rspec tests.
 * Run tests on Travis:
