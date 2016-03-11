@@ -1,10 +1,10 @@
 # ec2_address
 
-`ec2_address` is a command line tool made to quickly get the IP address of an Amazon AWS EC2 instance by name. I can also automate SSH'ing to them, too.
+`ec2_address` is a command line tool for quickly getting the IP address of an Amazon AWS EC2 instance by name.
 
-It will search _all_your_available_regions_ for instances that match a name, and can return public and private IPs or hostnames.
+It will search _all your available regions_ for instances that match a name, and can return public and private IPs or hostnames.
 
-It can also automatically build an `ssh` command based in the instance name. If you have a `.pem` file that matches the instance `KeyName`, the ssh will be told to use it automatically.
+It can also automatically build an `ssh` command based in the instance name. If you have a `.pem` file that matches the instance `KeyName`, ssh will be told to use it automatically.
 
 Examples:
 
@@ -22,7 +22,7 @@ $ ec2_address some-other-ec2-instance
 3 instances found with name 'some-other-ec2-instance'.
 Please choose the instance you want:
   0 some-other-ec2-instance 98.139.183.24  ec2-98-139-183-24.us-west-2.compute.amazonaws.com
-  1 some-other-ec2-instance 98.139.183.25 ec2-98-139-183-25.us-west-2.compute.amazonaws.com
+  1 some-other-ec2-instance 98.139.183.25  ec2-98-139-183-25.us-west-2.compute.amazonaws.com
   2 some-other-ec2-instance 98.139.183.26  ec2-98-139-183-26.us-west-2.compute.amazonaws.com
 0-2, ENTER=0 > 0
 98.139.183.24
@@ -35,8 +35,8 @@ $ ec2_address --first-instance some-other-ec2-instance
 $ ec2_address --partial-match magic
 2 instances found with name 'magic'.
 Please choose the instance you want:
-  0 magic-instance 98.139.183.24  ec2-98-139-183-24.us-west-2.compute.amazonaws.com
-  1 more-magic-instance 98.139.183.25 ec2-98-139-183-25.us-west-2.compute.amazonaws.com
+  0 magic-instance       98.139.183.24  ec2-98-139-183-24.us-west-2.compute.amazonaws.com
+  1 more-magic-instance  98.139.183.25  ec2-98-139-183-25.us-west-2.compute.amazonaws.com
 0-1, ENTER=0 > 0
 98.139.183.24
 
@@ -102,4 +102,3 @@ Bug reports and pull requests are welcome on GitHub at https://github.com/xunker
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
-
