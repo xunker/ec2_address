@@ -22,16 +22,16 @@ EOS
 
   opt :public_ip_address,
     'use public IP address name of instance (default)',
-    short: :i
+    short: :a
   opt :public_dns_name,
     'use public DNS name of instance',
-    short: :n
+    short: :d
   opt :private_ip_address,
     'use private IP address name of instance',
-    short: :I
+    short: :A
   opt :private_dns_name,
     'use private DNS name of instance',
-    short: :N
+    short: :D
   opt :first_instance,
     'stop querying after first match',
     short: :f
@@ -48,6 +48,13 @@ EOS
     'add a username to ssh output ("<username>@<host>")',
     type: :string,
     short: :u
+  opt :identity,
+    'identify file to use',
+    type: :string,
+    short: :i
+  opt :detect_identity,
+    'automatically try to use correct identify file based on Key or UserName tag',
+    short: :I
   opt :disable_ssh_known_hosts,
     'tell ssh to ignore the `known_hosts` file.',
     short: :X
@@ -258,17 +265,50 @@ if opts.ssh
   # output options that can be used in ssh call
   ssh_args = []
 
-  if matching_instance.key_name
-    pem_file_name = "#{matching_instance.key_name}.pem"
-    log :debug, "Instance pem filename: #{pem_file_name.inspect}"
-    pem_file_path = File.join(opts.ssh_directory, pem_file_name)
-    log :debug, "Instance pem file path: #{pem_file_path.inspect}"
-    if File.exists?(pem_file_path)
-      log :debug, "Using PEM file: #{pem_file_name.inspect}"
-      ssh_args << "-i .ssh/#{matching_instance.key_name}.pem"
+  if opts.detect_identity
+    log :debug, "Automatic identify detection specified"
+    if matching_instance.key_name
+      pem_file_name = "#{matching_instance.key_name}.pem"
+      log :debug, "Instance pem filename: #{pem_file_name.inspect}"
+      pem_file_path = File.join(opts.ssh_directory, pem_file_name)
+      log :debug, "Instance pem file path: #{pem_file_path.inspect}"
+      if File.exists?(pem_file_path)
+        log :debug, "Using PEM file: #{pem_file_name.inspect}"
+        ssh_args << "-i .ssh/#{matching_instance.key_name}.pem"
+      else
+        log :info, "PEM #{pem_file_name.inspect} not found"
+      end
     else
-      log :info, "PEM #{pem_file_name.inspect} not found"
+      log :debug, "Instance has no `key_name` tag, cannot detect identity"
     end
+  end
+
+  if opts.identity
+    key_path = nil
+    log :debug, "Identify key `#{opts.identity}` specified"
+    if File.exists?(opts.identity)
+      log :debug, "Using identify key `#{opts.identity}`"
+      key_path = opts.identity
+    else
+      log :debug, "`#{opts.identity}` not found"
+      if opts.ssh_directory
+        # try with ssh_directory prepended
+        with_ssh_dir = "#{opts.ssh_directory}/#{opts.identity}"
+        log :debug, "Trying `#{with_ssh_dir}` instead"
+        if File.exists?(with_ssh_dir)
+          key_path = with_ssh_dir
+        else
+          log :debug, "Nope, `#{with_ssh_dir}` not found either"
+        end
+      end
+    end
+
+    if key_path
+      ssh_args << "-i #{key_path}"
+    else
+      fatal_error "#{opts.identity.inspect} was not found"
+    end
+
   end
 
   if opts.disable_ssh_known_hosts

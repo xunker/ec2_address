@@ -1,4 +1,6 @@
 === NEED TO
+* Use wildcards instead of manual searching:
+  - ec2_region.describe_instances(filters: [ { name: "tag-key", values: ["Name"] }, { name: "tag-value", values: ['*'+requested_instance_name+'*'] } ]).map(&:reservations).flatten.map(&:instances).flatten.select{|i| i.state.name == 'running'}
 * Add support for setting the ssh identify file name when using --ssh.
 * Include example of `ssh_ec2` bash alias, both using RVM and without.
 * Write README.
@@ -31,6 +33,7 @@
   - Add CLI flag to specify that the default config file should be ignored if found.
 
 === WANT TO
+* search on instance ids (/^i\-[a-z0-9]+) as well as names.
 * Replace Trollop with GetoptLong to minimize external dependencies. Trollop is easier to work with, but GetoptLong is built-in to ruby.
 * Find a way to test the installation process on various OSes.
 * Option to create and execute complete ssh command in order to deal with multiple name matches.
